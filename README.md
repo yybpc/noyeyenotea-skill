@@ -10,7 +10,7 @@
 
 把这句话发给你的 AI 助手即可：
 
-> 帮我安装爷爷不泡茶 Skill，仓库地址：https://github.com/yeyecha/noyeyenotea-skill
+> 帮我安装爷爷不泡茶 Skill，仓库地址：https://github.com/yybpc/noyeyenotea-skill
 
 AI 会自动 clone 仓库、放到对应 IDE 的 skill 目录、并提示你下一步。
 
@@ -29,7 +29,7 @@ AI 会自动 clone 仓库、放到对应 IDE 的 skill 目录、并提示你下�
 
 ```bash
 # 例：装到 Claude Code
-git clone https://github.com/yeyecha/noyeyenotea-skill ~/.claude/skills/noyeyenotea-skill
+git clone https://github.com/yybpc/noyeyenotea-skill ~/.claude/skills/noyeyenotea-skill
 ```
 
 只要目录下有 `SKILL.md`，IDE 下次启动会自动加载。对话中说 "武汉光谷有爷爷不泡茶吗" 即可触发。
