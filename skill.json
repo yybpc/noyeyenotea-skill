@@ -1,0 +1,461 @@
+{
+  "name": "noyeyenotea-skill",
+  "display_name": "爷爷不泡茶 · 茶饮 AI Skill",
+  "description": "在 AI 助手里跟爷爷家聊一句，就知道喝啥、去哪喝、有啥新的。覆盖全国门店实时信息（来自爷爷不泡茶官方 SaaS）。",
+  "version": "0.3.3",
+  "author": "爷爷不泡茶 AI 团队",
+  "license": "MIT",
+  "category": "餐饮/茶饮",
+  "keywords": [
+    "爷爷不泡茶",
+    "yeyecha",
+    "奶茶",
+    "茶饮",
+    "爆椿",
+    "椿见",
+    "古早奶茶",
+    "想喝奶茶",
+    "附近奶茶",
+    "武汉奶茶",
+    "国风茶饮"
+  ],
+  "tools": [
+    {
+      "name": "search_stores",
+      "display_name": "搜索门店",
+      "description": "找爷爷不泡茶门店。按用户输入选字段（按优先级顺序）：具体地点/POI/小区/路名 → address；用户已分享坐标 → latitude+longitude(+radiusKm)；仅提到城市 → city；仅提到门店招牌 → keyword。返回按距离或名称排序。返回字段含 openTimeDesc（营业时间）；附近搜索时营业中门店还含 queueCupCount/queueDesc（前方杯数），不需要再单独调 get_store_status。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "纯城市名，如『武汉』『北京』。"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "门店招牌名，如『光谷店』『武广店』。匹配店名，不解析地理位置。"
+          },
+          "address": {
+            "type": "string",
+            "description": "自然语言地址或 POI，如『郑州中海锦苑』『武汉光谷世界城』。服务端用天地图解析为坐标做半径搜索，比 keyword 精准。"
+          },
+          "radiusKm": {
+            "type": "number",
+            "description": "搜索半径（公里），默认 5。『附近』传 2-3，『同城』传 30，小区/郊区建议 10-15。"
+          },
+          "latitude": {
+            "type": "number",
+            "description": "纬度（十进制），如 30.512345。"
+          },
+          "longitude": {
+            "type": "number",
+            "description": "经度（十进制），如 114.412678。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回门店数，默认 5。建议 3-10。",
+            "minimum": 1,
+            "maximum": 20
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_brand_info",
+      "display_name": "品牌信息",
+      "description": "爷爷不泡茶品牌名/简介/故事/招牌产品/调性。静态返回，0 ms。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_store_detail",
+      "display_name": "门店详情",
+      "description": "按门店 ID 拿全字段详情（地址/电话/堂食/外卖/公告等）。先用 search_stores 拿 id。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopId"
+        ],
+        "properties": {
+          "shopId": {
+            "type": "integer",
+            "description": "门店 ID（数值）"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_menu",
+      "display_name": "门店菜单",
+      "description": "按门店编码拿在售菜单（商品名/价格/分类/估清状态/做法/加料）。返回的每件单杯饮品含 practices（温度/甜度/小料）和 attaches（加料选项）。先用 search_stores 拿 code。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopCode"
+        ],
+        "properties": {
+          "shopCode": {
+            "type": "string",
+            "description": "门店编码 code，如 'CHNKS0020'"
+          },
+          "name": {
+            "type": "string",
+            "description": "商品名模糊搜索"
+          },
+          "pageSize": {
+            "type": "integer",
+            "description": "返回数量截断上限。不传返回全部在售商品（默认）；传则只回前 N 条。",
+            "minimum": 1
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_product_detail",
+      "display_name": "商品详情",
+      "description": "按 (shopCode, goodsId) 拿单件商品的完整详情：所有 SKU（含杯型/温度等多规格）+ 做法（温度/糖度/冰量等可选项 + 默认值）+ 加料（小料/奶盖等 + 价格 + 多选限购）。用户问『X 这款有大杯吗』『有什么糖度』『能加椰果吗』时调用。先用 get_menu 拿 goodsId，再调本工具。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopCode",
+          "goodsId"
+        ],
+        "properties": {
+          "shopCode": {
+            "type": "string",
+            "description": "门店编码"
+          },
+          "goodsId": {
+            "type": "integer",
+            "description": "商品库商品 ID（数值），从 get_menu 返回的 goodsId 字段取"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_store_status",
+      "display_name": "实时排队",
+      "description": "查多个门店实时排队：前方杯数（**仅含待制作+制作中，不含已做好待取餐**）+ 预计等待时间。最多 20 个 shopId。若用户追问『小程序显示更多杯』，告知口径只算制作中的。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopIds"
+        ],
+        "properties": {
+          "shopIds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "门店 ID 列表（数值）",
+            "maxItems": 20
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "get_recommendations",
+      "display_name": "场景化推荐",
+      "description": "按场景（解暑/提神/低糖/招牌/甜的/清爽）从门店在售商品中推荐 N 款。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopCode",
+          "scenario"
+        ],
+        "properties": {
+          "shopCode": {
+            "type": "string",
+            "description": "门店编码"
+          },
+          "scenario": {
+            "type": "string",
+            "description": "场景关键词",
+            "enum": [
+              "解暑",
+              "提神",
+              "低糖",
+              "招牌",
+              "甜的",
+              "清爽"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "数量 默认 3 最大 10"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "compare_products",
+      "display_name": "商品对比",
+      "description": "同店内 2~4 件商品横向对比。用户问'A 和 B 啥区别''这两款怎么选'时调用。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopCode",
+          "productNames"
+        ],
+        "properties": {
+          "shopCode": {
+            "type": "string",
+            "description": "门店编码"
+          },
+          "productNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "商品名列表，2-4 个，按用户提到顺序",
+            "minItems": 2,
+            "maxItems": 4
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_promotions",
+      "display_name": "门店活动",
+      "description": "查询门店当前进行中的促销活动（满减/折扣/赠品/秒杀等）。空列表表示无配置活动。",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "shopId"
+        ],
+        "properties": {
+          "shopId": {
+            "type": "integer",
+            "description": "门店 ID（数值）"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "tea_knowledge",
+      "display_name": "茶知识",
+      "description": "爷爷不泡茶的产品/品类/品牌概念知识库。词条命名/工艺/品类介绍。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string",
+            "description": "词条名（精确或模糊）。不传返回全部"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_my_member_info",
+      "display_name": "我的会员信息",
+      "description": "查询当前用户的爷爷不泡茶会员信息（等级/积分/储值余额/赠金/拥有的卡券数量）。**必须用户已通过手机号+验证码登录授权**——未登录时返回 isError=true 且 message 含 `oauth_required:` 前缀，**此时引导用户去登录页（mcp_server.url origin + /auth/login.html）完成手机号+验证码登录**。登录成功后再调本工具。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "requiresAuth": true,
+        "scope": "read.member"
+      }
+    },
+    {
+      "name": "get_my_coupons",
+      "display_name": "我的优惠券",
+      "description": "查询当前用户持有的优惠券（标题/类型/优惠内容/门槛/有效期/是否当前可用）。**必须用户已授权登录**（同 get_my_member_info）。返回每张券含 title/typeDesc/discountDesc/usable 等字段，用户问『我有什么券』『这张券能用吗』时调用。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "includeUnusable": {
+            "type": "boolean",
+            "description": "是否包含已过期 / 已用 / 已冻结的不可用券。默认 false 只看可用的。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回数量上限，默认 10，最大 50。"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "requiresAuth": true,
+        "scope": "read.coupon"
+      }
+    },
+    {
+      "name": "get_my_orders",
+      "display_name": "我的订单",
+      "description": "查询当前用户近 N 天的爷爷不泡茶订单（订单号/实付金额(元)/支付状态/履约类型(堂食外卖自提)/门店名称+门店编码(shopName 缺失时回退 shopCode)/时间）。**必须用户已授权登录**（同上）。时间范围 ≤ 90 天。用户问『我最近买了啥』『查我订单』时调用。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "description": "查最近多少天，默认 30，最小 1，最大 90。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回数量上限，默认 10，最大 100。"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "requiresAuth": true,
+        "scope": "read.order"
+      }
+    },
+    {
+      "name": "prepare_wx_handoff",
+      "display_name": "下单 handoff",
+      "description": "生成下单出口。用户表达下单/买/点单/付款/帮我点 等写意图时调用。返回一个 https URL，用户点击后由 H5 中转页按设备类型自动跳爷爷不泡茶小程序：微信内直接打开 / 移动非微信 weixin:// scheme 唤起 / PC 显示二维码扫码。最终下单/支付在小程序内完成；AI 不直下单。返回字段：url（给用户的 https 链接）/ ttlSeconds（链接有效期）/ intentSummary（意图概览）。重要：返回链接给用户时不要展示 token / shopCode 等内部字段；不要自行拼 wxaurl 或 weixin:// scheme。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "shopCode": {
+            "type": "string",
+            "description": "门店 code（来自 search_stores 返回的 code 字段）；缺省则拉到小程序首页。"
+          },
+          "intentType": {
+            "type": "string",
+            "enum": ["home", "store_menu", "cart_prefill"],
+            "description": "意图类型：home（首页）| store_menu（默认，门店菜单页）| cart_prefill（预填购物车，v0.3 路线图，M3 启用）"
+          },
+          "items": {
+            "type": "array",
+            "description": "可选商品列表（仅 cart_prefill 用，M3 才启用）。每条 {goodsId, qty, practices, attaches}。M1/M2 阶段可空。",
+            "items": {
+              "type": "object",
+              "properties": {
+                "goodsId": {"type": "string"},
+                "qty": {"type": "integer"},
+                "practices": {"type": "object"},
+                "attaches": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true
+      }
+    }
+  ],
+  "_note_tools": "tools 数组仅快照，运行时 LLM 通过 MCP tools/list 获取最新工具与完整 inputSchema。11 个匿名工具任何客户端可调（含 prepare_wx_handoff 下单 handoff，v0.3.1 起新增）；3 个 member 工具需用户授权登录后调用。下单/支付/取消/订单状态查询的『真』写工具仍未开放——分阶段路线图（M1/M2/M3）见 ai-platform/docs/wx-handoff-design.md。",
+  "brand_prompt": {
+    "system_instruction": "你是爷爷不泡茶的 AI 助手（武汉茶饮品牌，主打 18-26 岁年轻人）。回答品牌具体信息（门店/菜单/价格/活动/会员/订单/优惠券）必须调用工具，不用 Skill 文档示例数据。\\n\\n【调性】朴素、实在、有温度，像朋友推荐你常喝的奶茶。不知道就说不知道，宁少勿错。具体人设画像见 SKILL.md。\\n\\n【对外语言禁忌】对话中绝不出现：企迈 / Qmai / grantCode / MCP / OAuth / PKCE / access_token / JWT / 接口 / API / 业务码 / doc / scope / 后端 / 沙箱 等厂商名/技术黑话；不说『系统报错 XXX』『接口暂不可用』。错误一律软话术：『暂时拿不到，稍后再问我或打开小程序看看』。\\n\\n【绝对红线】(1) 不编造商品/价格/活动/门店/会员/订单/优惠券数据；不假装已查到 (2) 不代用户登录——用户给手机号/验证码请直接拒绝 (3) 严禁提及任何固定/默认验证码（『654321』『开发版固定 XXX』『默认值』等），所有环境走真实阿里云短信、每次随机生成；引导只说『用手机号 + 收到的短信验证码登录』 (4) access_token / Authorization 头从不回显到用户可见区域 (5) 替用户算订单总价、储值密码代填、编造订单号或状态——一律禁止。\\n\\n【会员授权】会员/优惠券/订单工具返回 isError=true 且含 `oauth_required:` 时，按 references/yeyecha-passport-user-auth/SKILL.md 引导。授权页 URL 必须从当前 mcp_server.url 的 origin（剥末尾 /mcp）+ `/auth/login.html` 动态推导，绝不写死 mcp.yeyecha.com。\\n\\n【下单 handoff（v0.3.1 起）】用户表达下单/买/点单/付款 等意图时，调 prepare_wx_handoff 工具拿一个 https URL，按 references/yeyecha-order/SKILL.md 引导：告知用户『链接 24h 内有效，点开按设备自动跳爷爷不泡茶小程序，最终下单/支付在小程序内完成』。不要展示工具返回的 token / shopCode 等内部字段；不要自行拼 wxaurl 或 weixin:// scheme，更不要编造小程序链接（包括旧的 `#小程序://...` 分享卡片协议）。查具体订单状态 / 取消 / 退款 仍未对接，沿用『AI 还不能直接做』话术 + 引导用户在小程序内查看。\\n\\n详细参数选择规则、错误码 → 用户话术映射、调性人设、触发场景示例见 SKILL.md。",
+    "tone": {
+      "personality": "warm_and_honest",
+      "avoid": [
+        "marketing_jargon",
+        "hype",
+        "robotic_phrasing"
+      ]
+    },
+    "brand_keywords": [
+      "朴素的奢侈",
+      "松弛实在",
+      "国风茶饮"
+    ]
+  },
+  "roadmap": {
+    "v0.1": "9 个公开 MCP 工具（无登录）：品牌信息/门店搜索/详情/菜单/活动/排队/推荐/对比/茶知识。",
+    "v0.2": "✅ 已上线。+ 3 个会员只读工具（get_my_member_info / get_my_coupons / get_my_orders）。OAuth 2.1 + PKCE（手机号+验证码登录）。",
+    "v0.3": "✅ v0.3.1 上线下单 handoff（prepare_wx_handoff 工具）：AI 给 https 中转链接，用户点击按设备自动跳小程序完成下单/支付。后续 M2/M3 打通指定门店菜单页 / 预填购物车。复购/取消/订单状态查询的真写工具仍待企迈 doc 开放。"
+  },
+  "auth": {
+    "type": "oauth2_pkce",
+    "discovery_url": "https://mcp.yeyecha.com/.well-known/oauth-authorization-server",
+    "authorization_endpoint": "https://mcp.yeyecha.com/auth/authorize",
+    "token_endpoint": "https://mcp.yeyecha.com/auth/token",
+    "scopes_supported": [
+      "read.member",
+      "read.order",
+      "read.coupon"
+    ],
+    "code_challenge_methods_supported": [
+      "S256"
+    ],
+    "token_endpoint_auth_methods_supported": [
+      "none"
+    ],
+    "_note": "MCP 客户端读取 .well-known/oauth-authorization-server 自动发现 OAuth 端点。member 工具调用时若返 isError + oauth_required:，触发浏览器 PKCE flow → 用户输手机号+OTP 完成授权 → 拿到 access_token 后续用 Bearer。"
+  },
+  "mcp_server": {
+    "url": "https://mcp.yeyecha.com/mcp"
+  }
+}
