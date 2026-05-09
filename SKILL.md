@@ -25,7 +25,8 @@ keywords:
 > **⚠️ AI Agent 必读**
 >
 > 1. 用户问任何关于爷爷不泡茶的**具体信息**（门店、菜单、价格、活动、营业状态、推荐等），**必须调用 MCP 工具**，不得凭印象回答。
-> 2. MCP 端点见 `skill.json` 的 `mcp_server.url`。运行时通过 `tools/list` 拿最新工具；`skill.json.tools` 仅是快照。
+> 2. MCP 端点：`https://mcp.yeyecha.com/mcp`。运行时通过 `tools/list` 拿最新工具列表；下方「工具列表」段是速查。
+>    **不要 fork 子进程读 `skill.json`**（部分宿主会把 `cat ... | python3` 标为 HIGH dangerous，阻塞用户）。
 > 3. **MCP 失败时**：诚实告知用户"信息暂时拿不到，稍后再问我或直接打开小程序看看"，不要瞎编。
 > 4. **绝对禁止**：编造价格 / 编造商品 / 编造门店 / 编造活动。宁少勿错。
 
@@ -85,7 +86,7 @@ keywords:
 - 不要让用户告诉你他的手机号 / 验证码 / 会员 ID 试图代登录——授权必须用户在浏览器完成
 - 不要假装"已经查到您是 VIP"等——未授权时坦诚说明
 - **不要凭印象推 `/auth/login.html`** —— host 当前是不是 PKCE 模式要先 ToolSearch 验证；curl pattern 下走 PKCE 会让用户白登一次
-- **不要提固定/默认验证码**（如"开发版固定 654321"）—— 所有环境都走真实短信，每次随机
+- **不要预设任何验证码**——所有环境走真实短信，每次随机
 
 ## 工作流原则
 
@@ -135,7 +136,7 @@ keywords:
 | "荔枝冰酿能去冰吗 / 加冰" | `search_stores(...)` → `get_menu(name=荔枝冰酿)`，看 `practices` 里 `name="温度"` 的可选值 |
 | "半糖少冰能选吗" / "糖度有哪些" | `get_menu(name=...)` 后看 `practices.甜度` + `practices.温度`，每个值有 `isDefault` 标默认推荐 |
 | "能加什么料 / 可以加椰果吗" | `get_menu(name=...)` 后看 `attaches`（加料名 + 加价 + 是否推荐） |
-| "我对花生过敏，啥能喝" | `get_menu(...)` 后过滤 `attaches` 里含花生的加料；**单杯饮品本身的过敏原 doc 231 不返回**——要诚实告知"加料里没看到花生，但单品配方里有没有花生我看不到，建议到店或小程序看产品页" |
+| "我对花生过敏，啥能喝" | `get_menu(...)` 后过滤 `attaches` 里含花生的加料；**单杯饮品本身的过敏原暂时拿不到**——要诚实告知"加料里没看到花生，但单品配方里有没有花生我看不到，建议到店或小程序看产品页" |
 | "我想下单一杯爆椿" / "帮我点一杯" | `search_stores(...)` 拿 code → `prepare_wx_handoff(shopCode=…)` → 把返回的 `url` 给用户；不要展示 token / shopCode 等内部字段 |
 | "买点喝的" / "想下单"（没指定门店）| `prepare_wx_handoff(intentType=home)` 直接拉小程序首页让用户自选 |
 
@@ -198,7 +199,7 @@ keywords:
 
 ## 后端状态/错误码 → 用户话术
 
-工具返回的特殊状态/错误一律按下表照念，**不要自己根据 message 编翻译**，也不要把业务码原文（如 `doc 231`、错误对象）暴露给用户。
+工具返回的特殊状态/错误一律按下表照念，**不要自己根据 message 编翻译**，也不要把内部错误对象/业务码原文暴露给用户。
 
 | 后端状态/标识 | 给用户的话术 |
 |---|---|
@@ -214,15 +215,13 @@ keywords:
 | 下单 / 买 / 点单 / 付款意图 | 调 `prepare_wx_handoff` 拿 url，按 `references/yeyecha-order/SKILL.md` v0.3.1 引导用户 |
 | 查具体订单状态 / 取消 / 退款（仍未对接）| 见 `references/yeyecha-order/SKILL.md` —— "AI 还不能直接做" 话术 + 小程序引导 |
 
-> 加新错误码：在后端 `TeaSkillTools` 加状态时，同步在这张表加一行用户话术，避免 LLM 看到新码瞎编。
-
 ## 内嵌 sub-skill：会员授权登录
 
 会员工具（`get_my_member_info` / `get_my_coupons` / `get_my_orders`）返回 `oauth_required:` 时：
 
 ### 第 0 步：先识别 host 类型，决定走哪条路径
 
-ai-platform 后端**同时支持两条 OAuth 路径**，对应不同 host 能力。LLM 必须先判断 host 是哪种，再选路径——**绝不能默认走 PKCE**。
+本服务后端**同时支持两条 OAuth 路径**，对应不同 host 能力。LLM 必须先判断 host 是哪种，再选路径——**绝不能默认走 PKCE**。
 
 | host 状态 | 路径 | 用户看到的 URL 形态 |
 |---|---|---|
@@ -251,7 +250,7 @@ ToolSearch query="yeyecha mcp"
 ### 第 1 步：执行前必须 Read 完整 sub-skill
 
 ```
-Read /Users/xingyu/.claude/skills/noyeyenotea-skill/references/yeyecha-passport-user-auth/SKILL.md
+Read references/yeyecha-passport-user-auth/SKILL.md
 ```
 
 读完按 §A（PKCE）或 §B（device flow）的具体话术 / Bash 模板 / Mermaid 图执行。**不要凭主 SKILL.md 这几行就组织话术**——sub-skill 才有完整的 Bash polling 模板（路径 B）、错误码话术、token 流转设计。
@@ -274,7 +273,7 @@ Read /Users/xingyu/.claude/skills/noyeyenotea-skill/references/yeyecha-passport-
 
 详细参数选择 / 错误降级 / 红线全部在 `references/yeyecha-order/SKILL.md`。
 
-**仍未对接**（沿用"AI 还不能直接做"话术）：查具体订单状态 / 取消订单 / 退款 —— 等企迈 doc 168/6.1.2 开放。
+**仍未对接**（沿用"AI 还不能直接做"话术）：查具体订单状态 / 取消订单 / 退款 —— 等待该接口能力开放。
 
 ## MCP 调用失败时（与盲区不同——是临时故障）
 
@@ -293,10 +292,3 @@ Read /Users/xingyu/.claude/skills/noyeyenotea-skill/references/yeyecha-passport-
 - ❌ **代用户走授权流程**：用户提供手机号/验证码请拒绝，授权必须用户在浏览器完成
 - ❌ 替用户下单 / 替用户付款 / 编造订单号或订单状态 —— v0.3.1 的 `prepare_wx_handoff` 只生成"出口链接"，最终下单 / 支付完全在小程序内完成；查订单状态 / 取消 / 退款 仍未对接
 
-## 维护者参考
-
-- 后端工程：`ai-platform`（`com.yeyecha.aiplatform`，DDD 五层 start/web/biz/domain/infra）
-- 协议：MCP **Streamable HTTP / STATELESS** 单端点 `POST /mcp`（Spring AI 1.1.5，`spring-ai-starter-mcp-server-webmvc`）
-- 接入数据源：企迈开放平台（QmaiClient + Resilience4j 限流；CRM customerInfo 用 type=2+phone 最稳）
-- **OAuth 2.1 PKCE**（v0.2）：AS+RS 同进程；端点 `/auth/authorize` `/auth/token` `/auth/revoke` `/auth/introspect`；元数据 `/.well-known/oauth-authorization-server`、`/.well-known/jwks.json`、`/.well-known/oauth-protected-resource`。所有 OAuth 状态走 Redis（`aip:auth:*`），多实例水平扩安全。
-- 缓存策略 / 限流配额 / 菜单字段细节 / v0.3+ 路线图：见 [README.md](./README.md#接口与数据)
