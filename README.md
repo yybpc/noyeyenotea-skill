@@ -168,4 +168,3 @@ curl -s -X POST "https://mcp.yeyecha.com/mcp" \
 
 ---
 
-> Contributor 文档（本地开发、上游接口、缓存策略等）见 [CLAUDE.md](./CLAUDE.md)。
