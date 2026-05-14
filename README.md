@@ -27,36 +27,7 @@ AI 会自动 clone 仓库、放到对应 IDE 的 skill 目录、并提示你下�
 | Windsurf | `.windsurf/skills/noyeyenotea-skill/` |
 | 通用 | `.agents/skills/noyeyenotea-skill/` |
 
-```bash
-# 例：装到 Claude Code
-git clone https://github.com/yybpc/noyeyenotea-skill ~/.claude/skills/noyeyenotea-skill
-```
 
-只要目录下有 `SKILL.md`，IDE 下次启动会自动加载。对话中说 "武汉光谷有爷爷不泡茶吗" 即可触发。
-
-### 注册 MCP server（必需，否则工具调不到）
-
-skill.json 里的 `mcp_server.url` 只是元数据——**Claude Code 不会自动把它注册成 MCP client**，必须你手动把 server 注册到 IDE 的 MCP 配置：
-
-```bash
-# Claude Code（CLI 命令）
-claude mcp add yeyecha-mcp https://mcp.yeyecha.com/mcp
-```
-
-或者在 `~/.claude/settings.json` / 项目根目录 `.mcp.json` 里加：
-
-```json
-{
-  "mcpServers": {
-    "yeyecha-mcp": {
-      "transport": "streamable-http",
-      "url": "https://mcp.yeyecha.com/mcp"
-    }
-  }
-}
-```
-
-注册完重开会话，工具就以 `mcp__yeyecha-mcp__search_stores` 等形态出现在 LLM 工具列表里。**没注册时**，skill 文档照样会被 LLM 读到，但 LLM 调不到 MCP 工具，只能告诉用户"信息暂时拿不到"——所以这步不能跳。
 
 ## 当前能力
 
